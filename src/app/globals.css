@@ -131,14 +131,13 @@
    margin: 0;
    padding: 0;
    scroll-behavior: smooth;
-  width: 100%;
-  overflow-x: clip;
+   width: 100%;
  }
- 
+
  body {
    margin: 0;
    padding: 0;
-  width: 100%;
+   width: 100%;
    min-height: 100vh;
    font-family: var(--font-ui);
    font-size: var(--step-0);
@@ -147,7 +146,7 @@
    background: var(--bg);
    -webkit-font-smoothing: antialiased;
    transition: background 0.3s ease, color 0.3s ease;
-  overflow-x: clip;
+   overflow-x: hidden;
  }
  
  ::selection {

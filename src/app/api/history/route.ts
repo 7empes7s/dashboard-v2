@@ -16,9 +16,10 @@ export async function GET() {
   const recentIncidents = completed
     .filter((s: { status: string }) => s.status === "stuck" || s.status === "failed")
     .slice(0, 10)
-    .map((s: { id: string; topic?: string; stage: string; failedAt?: number; lastError?: string }) => ({
+    .map((s: { id: string; topic?: string; slug?: string; stage: string; failedAt?: number; lastError?: string }) => ({
       id: s.id,
       topic: s.topic,
+      slug: s.slug,
       stage: s.stage,
       error: s.lastError,
       timestamp: s.failedAt,

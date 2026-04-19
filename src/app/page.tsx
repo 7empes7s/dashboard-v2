@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 type PipelineStory = {
   id: string;
   topic?: string;
+  slug?: string;
   stage?: string;
   status: string;
   sourceVertical?: string;
@@ -188,6 +189,7 @@ type HistoryResponse = {
   incidents: Array<{
     id: string;
     topic?: string;
+    slug?: string;
     stage?: string;
     error?: string;
     timestamp?: number;
@@ -245,14 +247,6 @@ type ToastState = {
 };
 
 const POLL_MS = 15000;
-const SECTION_LINKS = [
-  ["overview", "Overview"],
-  ["machines", "Machines"],
-  ["pipeline", "Pipeline"],
-  ["models", "Models"],
-  ["providers", "Providers"],
-  ["history", "History"],
-] as const;
 
 function cn(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -425,25 +419,32 @@ function SectionHeader({
 
 function useActiveSection(ids: string[]) {
   const [active, setActive] = useState(ids[0]);
+  const idsKey = ids.join(",");
   useEffect(() => {
-    const els = ids.map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
-    if (!els.length) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
-        if (visible[0]) setActive(visible[0].target.id);
-      },
-      { rootMargin: "-30% 0px -60% 0px", threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] }
-    );
-    els.forEach((el) => obs.observe(el));
-    return () => obs.disconnect();
-  }, [ids.join(",")]);
+    const update = () => {
+      const trigger = window.scrollY + window.innerHeight * 0.3;
+      let best = ids[0];
+      let bestTop = -Infinity;
+      for (const id of ids) {
+        const el = document.getElementById(id);
+        if (!el) continue;
+        const top = el.getBoundingClientRect().top + window.scrollY;
+        if (top <= trigger && top > bestTop) {
+          bestTop = top;
+          best = id;
+        }
+      }
+      setActive(best);
+    };
+    window.addEventListener("scroll", update, { passive: true });
+    update();
+    return () => window.removeEventListener("scroll", update);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey]);
   return active;
 }
 
-type NavSection = { id: string; label: string; num: string };
+type NavSection = { id: string; label: string; num: string; meta?: string };
 
 function ProgressRail({
   sections,
@@ -458,6 +459,15 @@ function ProgressRail({
     <nav
       aria-label="Section progress"
       className="progress-rail"
+      style={{
+        background: "color-mix(in oklab, var(--surface) 90%, transparent)",
+        border: "1px solid var(--border)",
+        borderRadius: "999px",
+        padding: "0.5rem 0.4rem",
+        backdropFilter: "blur(12px)",
+        boxShadow: "0 4px 16px -4px rgba(0,0,0,0.18)",
+        gap: "0.2rem",
+      }}
     >
       {sections.map((s) => {
         const isActive = s.id === active;
@@ -466,39 +476,45 @@ function ProgressRail({
             key={s.id}
             onClick={() => onJump(s.id)}
             aria-label={`Jump to ${s.label}`}
+            title={`${s.label}${s.meta ? ` — ${s.meta}` : ""}`}
             style={{
               appearance: "none",
               background: "transparent",
               border: "none",
-              padding: "0.15rem 0",
+              padding: "0.3rem 0.35rem",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
-              gap: "0.6rem",
+              justifyContent: "flex-end",
+              gap: "0.5rem",
               color: "inherit",
             }}
           >
             <span
               className="mono"
               style={{
-                fontSize: "0.65rem",
-                color: isActive ? "var(--ink)" : "var(--ink-3)",
+                fontSize: "0.58rem",
+                color: "var(--ink-2)",
                 opacity: isActive ? 1 : 0,
-                transition: "opacity .2s, color .2s",
-                width: "1.5rem",
+                maxWidth: isActive ? "8rem" : "0",
+                overflow: "hidden",
+                whiteSpace: "nowrap",
+                transition: "opacity .25s, max-width .3s ease",
                 textAlign: "right",
                 letterSpacing: "0.04em",
               }}
             >
-              {s.num}
+              {s.label}{s.meta ? ` · ${s.meta}` : ""}
             </span>
             <span
               style={{
                 display: "block",
-                width: isActive ? "28px" : "16px",
-                height: "1px",
+                width: isActive ? "20px" : "6px",
+                height: "6px",
                 background: isActive ? "var(--ink)" : "var(--border)",
+                borderRadius: "999px",
                 transition: "all .25s ease",
+                flexShrink: 0,
               }}
             />
           </button>
@@ -564,7 +580,7 @@ function FloatingNav({
                 style={{
                   display: "flex",
                   width: "100%",
-                  alignItems: "baseline",
+                  alignItems: "center",
                   gap: "0.75rem",
                   padding: "0.55rem 0.75rem",
                   border: "none",
@@ -575,10 +591,15 @@ function FloatingNav({
                   borderRadius: "3px",
                 }}
               >
-                <span className="mono" style={{ fontSize: "0.7rem", color: "var(--ink-3)", width: "1.5rem" }}>
+                <span className="mono" style={{ fontSize: "0.7rem", color: "var(--ink-3)", width: "1.5rem", flexShrink: 0 }}>
                   {s.num}
                 </span>
                 <span style={{ flex: 1, fontSize: "0.92rem" }}>{s.label}</span>
+                {s.meta ? (
+                  <span className="mono" style={{ fontSize: "0.65rem", color: "var(--ink-3)", whiteSpace: "nowrap" }}>
+                    {s.meta}
+                  </span>
+                ) : null}
               </button>
             ))}
           </div>
@@ -1060,10 +1081,52 @@ export default function Home() {
     }));
   }, [availableModels, data?.providers?.providers]);
 
-  const NAV_SECTIONS: NavSection[] = useMemo(
-    () => SECTION_LINKS.map(([id, label], i) => ({ id, label, num: String(i + 1).padStart(2, "0") })),
-    []
-  );
+  const NAV_SECTIONS: NavSection[] = useMemo(() => {
+    const modelsAvailable = availableModels.filter((m) => m.available).length;
+    const queuedCount = data?.pipeline?.stats.queued || 0;
+    const failedCount = data?.pipeline?.stats.failed || 0;
+    const incidentCount = recentIncidents.length;
+    return [
+      {
+        id: "overview",
+        label: "Overview",
+        num: "01",
+        meta: degradedServices.length > 0 ? `${degradedServices.length} degraded` : "healthy",
+      },
+      {
+        id: "machines",
+        label: "Machines",
+        num: "02",
+        meta: `${data?.infra?.summary.activeServices || 0} services`,
+      },
+      {
+        id: "pipeline",
+        label: "Pipeline",
+        num: "03",
+        meta: failedCount > 0 ? `${queuedCount} queued · ${failedCount} failed` : `${queuedCount} queued`,
+      },
+      {
+        id: "models",
+        label: "Models",
+        num: "04",
+        meta: modelsAvailable > 0 ? `${modelsAvailable} available` : "none",
+      },
+      {
+        id: "providers",
+        label: "Providers",
+        num: "05",
+        meta: data?.vast?.account?.usableCredits != null
+          ? formatMoney(data.vast.account.usableCredits)
+          : "n/a",
+      },
+      {
+        id: "history",
+        label: "History",
+        num: "06",
+        meta: incidentCount > 0 ? `${incidentCount} incidents` : "clean",
+      },
+    ];
+  }, [availableModels, data, degradedServices.length, recentIncidents.length]);
 
   const activeSection = useActiveSection(NAV_SECTIONS.map((s) => s.id));
 
@@ -1276,7 +1339,7 @@ export default function Home() {
               />
             </div>
 
-            <div className="surface-panel mt-6 rounded-[2rem] p-6">
+            <div className="surface-panel mt-6 min-w-0 rounded-[2rem] p-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
                   <p className="subtle-label">Service controls</p>
@@ -1360,7 +1423,7 @@ export default function Home() {
             />
 
             <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-              <div className="surface-panel rounded-[2rem] p-6">
+              <div className="surface-panel min-w-0 rounded-[2rem] p-6">
                 <p className="subtle-label">Story injection</p>
                 <h3 className="mt-2 text-2xl font-semibold">Push a story into the editorial stream.</h3>
                 <div className="mt-6 grid gap-3">
@@ -1483,7 +1546,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="surface-panel rounded-[2rem] p-6">
+              <div className="surface-panel min-w-0 rounded-[2rem] p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p className="subtle-label">Queue + failures</p>
@@ -1501,13 +1564,13 @@ export default function Home() {
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
                           <p className="font-mono text-sm text-foreground">
-                            {story.topic || story.id}
+                            {story.topic || story.slug?.replace(/-/g, ' ') || story.id}
                           </p>
                           <p className="mt-1 text-sm text-muted-foreground">
                             {story.stage} • {story.sourceVertical || "unknown vertical"}
                           </p>
                           {story.gateReason ? (
-                            <p className="mt-2 text-sm text-[var(--warning)]">
+                            <p className="mt-2 text-sm text-[var(--warning)] break-all">
                               {story.gateReason}
                             </p>
                           ) : null}
@@ -1573,13 +1636,13 @@ export default function Home() {
                     <div key={`completed-${story.id}`} className="surface-muted rounded-[1.25rem] p-4">
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
-                          <p className="font-mono text-sm">{story.topic || story.id}</p>
+                          <p className="font-mono text-sm">{story.topic || story.slug?.replace(/-/g, ' ') || story.id}</p>
                           <p className="mt-1 text-sm text-muted-foreground">
                             {story.stage} • retries {story.retries || 0}
                           </p>
                           {story.lastError ? (
-                            <p className="mt-2 text-sm text-muted-foreground">
-                              {story.lastError}
+                            <p className="mt-2 break-all text-sm text-muted-foreground">
+                              {story.lastError.length > 160 ? `${story.lastError.slice(0, 160)}…` : story.lastError}
                             </p>
                           ) : null}
                         </div>
@@ -1717,7 +1780,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="min-w-0 overflow-x-auto">
                   <table className="w-full min-w-[52rem] border-separate border-spacing-y-2">
                     <thead>
                       <tr className="text-left text-xs uppercase tracking-[0.16em] text-muted-foreground">
@@ -2095,7 +2158,7 @@ export default function Home() {
             />
 
             <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-              <div className="surface-panel rounded-[2rem] p-6">
+              <div className="surface-panel min-w-0 rounded-[2rem] p-6">
                 <p className="subtle-label">Recent incidents</p>
                 <div className="mt-6 space-y-3">
                   {recentIncidents.length === 0 ? (
@@ -2108,15 +2171,15 @@ export default function Home() {
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                           <div>
                             <p className="font-mono text-sm">
-                              {incident.topic || incident.id}
+                              {incident.topic || incident.slug?.replace(/-/g, ' ') || incident.id}
                             </p>
                             <p className="mt-1 text-sm text-muted-foreground">
                               {incident.stage || "unknown stage"} •{" "}
                               {formatRelativeTime(incident.timestamp)}
                             </p>
                             {incident.error ? (
-                              <p className="mt-2 text-sm text-muted-foreground">
-                                {incident.error}
+                              <p className="mt-2 break-all text-sm text-muted-foreground">
+                                {incident.error.length > 160 ? `${incident.error.slice(0, 160)}…` : incident.error}
                               </p>
                             ) : null}
                           </div>
@@ -2128,7 +2191,7 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="surface-panel rounded-[2rem] p-6">
+              <div className="surface-panel min-w-0 rounded-[2rem] p-6">
                 <p className="subtle-label">Audit trail</p>
                 <div className="mt-6 overflow-x-auto">
                   <table className="w-full min-w-[42rem] border-separate border-spacing-y-2">
