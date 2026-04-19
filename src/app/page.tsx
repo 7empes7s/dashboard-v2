@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type PipelineStory = {
   id: string;
@@ -423,6 +423,219 @@ function SectionHeader({
   );
 }
 
+function useActiveSection(ids: string[]) {
+  const [active, setActive] = useState(ids[0]);
+  useEffect(() => {
+    const els = ids.map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
+    if (!els.length) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]) setActive(visible[0].target.id);
+      },
+      { rootMargin: "-30% 0px -60% 0px", threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] }
+    );
+    els.forEach((el) => obs.observe(el));
+    return () => obs.disconnect();
+  }, [ids.join(",")]);
+  return active;
+}
+
+type NavSection = { id: string; label: string; num: string };
+
+function ProgressRail({
+  sections,
+  active,
+  onJump,
+}: {
+  sections: NavSection[];
+  active: string;
+  onJump: (id: string) => void;
+}) {
+  return (
+    <nav
+      aria-label="Section progress"
+      className="progress-rail"
+    >
+      {sections.map((s) => {
+        const isActive = s.id === active;
+        return (
+          <button
+            key={s.id}
+            onClick={() => onJump(s.id)}
+            aria-label={`Jump to ${s.label}`}
+            style={{
+              appearance: "none",
+              background: "transparent",
+              border: "none",
+              padding: "0.15rem 0",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.6rem",
+              color: "inherit",
+            }}
+          >
+            <span
+              className="mono"
+              style={{
+                fontSize: "0.65rem",
+                color: isActive ? "var(--ink)" : "var(--ink-3)",
+                opacity: isActive ? 1 : 0,
+                transition: "opacity .2s, color .2s",
+                width: "1.5rem",
+                textAlign: "right",
+                letterSpacing: "0.04em",
+              }}
+            >
+              {s.num}
+            </span>
+            <span
+              style={{
+                display: "block",
+                width: isActive ? "28px" : "16px",
+                height: "1px",
+                background: isActive ? "var(--ink)" : "var(--border)",
+                transition: "all .25s ease",
+              }}
+            />
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function FloatingNav({
+  sections,
+  active,
+  onJump,
+  theme,
+  onTheme,
+  variant,
+  onVariant,
+  onRefresh,
+}: {
+  sections: NavSection[];
+  active: string;
+  onJump: (id: string) => void;
+  theme: "light" | "dark";
+  onTheme: () => void;
+  variant: string;
+  onVariant: (v: string) => void;
+  onRefresh: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const activeSec = sections.find((s) => s.id === active) || sections[0];
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("click", onDoc);
+    return () => document.removeEventListener("click", onDoc);
+  }, []);
+
+  return (
+    <div ref={ref} className="floating-nav-shell">
+      {open && (
+        <div
+          className="card"
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 0.6rem)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "min(360px, calc(100vw - 2rem))",
+            padding: "0.5rem",
+            boxShadow: "0 16px 48px -12px rgba(0,0,0,0.25)",
+            backdropFilter: "blur(12px)",
+            background: "color-mix(in oklab, var(--surface) 96%, transparent)",
+          }}
+        >
+          <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
+            {sections.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => { onJump(s.id); setOpen(false); }}
+                style={{
+                  display: "flex",
+                  width: "100%",
+                  alignItems: "baseline",
+                  gap: "0.75rem",
+                  padding: "0.55rem 0.75rem",
+                  border: "none",
+                  background: s.id === active ? "var(--surface-2)" : "transparent",
+                  cursor: "pointer",
+                  color: "inherit",
+                  textAlign: "left",
+                  borderRadius: "3px",
+                }}
+              >
+                <span className="mono" style={{ fontSize: "0.7rem", color: "var(--ink-3)", width: "1.5rem" }}>
+                  {s.num}
+                </span>
+                <span style={{ flex: 1, fontSize: "0.92rem" }}>{s.label}</span>
+              </button>
+            ))}
+          </div>
+          <div
+            style={{
+              borderTop: "1px solid var(--hairline)",
+              marginTop: "0.5rem",
+              paddingTop: "0.5rem",
+              display: "flex",
+              gap: "0.5rem",
+              flexWrap: "wrap",
+              padding: "0.5rem",
+            }}
+          >
+            <button onClick={onTheme} className="jump-chip">
+              {theme === "dark" ? "☾ Dark" : "☀ Light"}
+            </button>
+            <button onClick={() => onVariant(variant === "A" ? "B" : variant === "B" ? "C" : "A")} className="jump-chip">
+              Variant {variant}
+            </button>
+            <button onClick={() => { onRefresh(); setOpen(false); }} className="jump-chip">
+              ↺ Refresh
+            </button>
+          </div>
+        </div>
+      )}
+
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="card"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "0.75rem",
+          padding: "0.55rem 0.9rem 0.55rem 0.75rem",
+          cursor: "pointer",
+          boxShadow: "0 8px 24px -8px rgba(0,0,0,0.2)",
+          backdropFilter: "blur(12px)",
+          background: "color-mix(in oklab, var(--surface) 92%, transparent)",
+          minWidth: "220px",
+          color: "inherit",
+          border: "1px solid var(--border)",
+          borderRadius: "999px",
+        }}
+      >
+        <span className="mono" style={{ fontSize: "0.68rem", color: "var(--ink-3)", letterSpacing: "0.04em" }}>
+          {activeSec.num}
+        </span>
+        <span style={{ flex: 1, fontSize: "0.9rem", textAlign: "left" }}>{activeSec.label}</span>
+        <span style={{ fontSize: "0.7rem", color: "var(--ink-3)", transition: "transform .2s", transform: open ? "rotate(180deg)" : "none" }}>
+          ▾
+        </span>
+      </button>
+    </div>
+  );
+}
+
 function Toast({ state, onClose }: { state: ToastState; onClose: () => void }) {
   useEffect(() => {
     if (!state.visible) return;
@@ -614,6 +827,7 @@ function MachinePanel({
 
 export default function Home() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [variant, setVariant] = useState<"A" | "B" | "C" | "old">("B");
   const [data, setData] = useState<DashboardData | null>(null);
   const [historySeries, setHistorySeries] = useState<HistorySeries>({
     localCpu: [],
@@ -709,6 +923,15 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    try {
+      const savedVariant = window.localStorage.getItem("dash-variant");
+      if (savedVariant && ["A", "B", "C", "old"].includes(savedVariant)) {
+        setVariant(savedVariant as "A" | "B" | "C" | "old");
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
     const refresh = async () => {
@@ -788,6 +1011,14 @@ export default function Home() {
     setTheme(next);
   };
 
+  const toggleVariant = () => {
+    const variants: Array<"A" | "B" | "C" | "old"> = ["A", "B", "C", "old"];
+    const currentIndex = variants.indexOf(variant);
+    const next = variants[(currentIndex + 1) % variants.length];
+    window.localStorage.setItem("dash-variant", next);
+    setVariant(next);
+  };
+
   const availableModels = data?.models?.models || [];
   const blockedModels = new Set(data?.blocklist?.blocked || []);
   const degradedServices =
@@ -829,6 +1060,18 @@ export default function Home() {
     }));
   }, [availableModels, data?.providers?.providers]);
 
+  const NAV_SECTIONS: NavSection[] = useMemo(
+    () => SECTION_LINKS.map(([id, label], i) => ({ id, label, num: String(i + 1).padStart(2, "0") })),
+    []
+  );
+
+  const activeSection = useActiveSection(NAV_SECTIONS.map((s) => s.id));
+
+  const jumpTo = useCallback((id: string) => {
+    const el = document.getElementById(id);
+    if (el) window.scrollTo({ top: el.offsetTop - 24, behavior: "smooth" });
+  }, []);
+
   if (loading) {
     return (
       <main className="page-shell py-10">
@@ -849,53 +1092,35 @@ export default function Home() {
     <>
       <Toast state={toast} onClose={() => setToast((current) => ({ ...current, visible: false }))} />
 
-      <main className="pb-16">
-        <header className="sticky top-0 z-40 border-b border-border/70 bg-background/75 backdrop-blur-xl">
-          <div className="page-shell flex flex-col gap-4 py-4 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="subtle-label">TechInsiderBytes</p>
-              <div className="mt-1 flex flex-wrap items-center gap-3">
-                <h1 className="font-display text-2xl font-semibold tracking-[-0.06em]">
-                  Control Room
-                </h1>
-                <span className="text-sm text-muted-foreground">
-                  Updated {formatRelativeTime(lastUpdated)}
-                </span>
-              </div>
-            </div>
+      <ProgressRail sections={NAV_SECTIONS} active={activeSection} onJump={jumpTo} />
 
-            <div className="flex flex-wrap items-center gap-2">
-              {SECTION_LINKS.map(([href, label]) => (
-                <a key={href} href={`#${href}`} className="jump-chip">
-                  {label}
-                </a>
-              ))}
-              <button
-                type="button"
-                className="ghost-btn"
-                onClick={() =>
-                  runAction(
-                    "refresh",
-                    async () => {
-                      await loadDashboard();
-                      return new Response(JSON.stringify({ success: true }), {
-                        status: 200,
-                        headers: { "Content-Type": "application/json" },
-                      });
-                    },
-                    "Dashboard refreshed",
-                    "refresh.dashboard",
-                    "dashboard",
-                    {}
-                  )
-                }
-              >
-                Refresh
-              </button>
-              <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            </div>
-          </div>
-        </header>
+      <FloatingNav
+        sections={NAV_SECTIONS}
+        active={activeSection}
+        onJump={jumpTo}
+        theme={theme}
+        onTheme={toggleTheme}
+        variant={variant}
+        onVariant={(v) => setVariant(v as typeof variant)}
+        onRefresh={() =>
+          runAction(
+            "refresh",
+            async () => {
+              await loadDashboard();
+              return new Response(JSON.stringify({ success: true }), {
+                status: 200,
+                headers: { "Content-Type": "application/json" },
+              });
+            },
+            "Dashboard refreshed",
+            "refresh.dashboard",
+            "dashboard",
+            {}
+          )
+        }
+      />
+
+      <main className={`pb-32 var-${variant.toLowerCase()}`}>
 
         <section id="overview" className="section-shell">
           <div className="page-shell">

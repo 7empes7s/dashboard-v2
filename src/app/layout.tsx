@@ -1,18 +1,19 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { JetBrains_Mono, Manrope, Sora } from "next/font/google";
+import { Instrument_Serif, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const bodyFont = Manrope({
+const bodyFont = Inter({
   variable: "--font-sans",
   subsets: ["latin"],
   display: "swap",
 });
 
-const displayFont = Sora({
+const displayFont = Instrument_Serif({
   variable: "--font-display",
   subsets: ["latin"],
   display: "swap",
+  weight: "400",
 });
 
 const monoFont = JetBrains_Mono({
@@ -24,9 +25,9 @@ const monoFont = JetBrains_Mono({
 const themeScript = `
   (() => {
     try {
-      const stored = window.localStorage.getItem("dashboard-theme");
+      const storedTheme = window.localStorage.getItem("dashboard-theme");
       const system = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-      document.documentElement.dataset.theme = stored || system || "dark";
+      document.documentElement.dataset.theme = storedTheme || system || "dark";
     } catch {
       document.documentElement.dataset.theme = "dark";
     }
