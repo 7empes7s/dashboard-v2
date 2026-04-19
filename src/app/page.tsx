@@ -455,22 +455,24 @@ function ProgressRail({
   active: string;
   onJump: (id: string) => void;
 }) {
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const prevActive = useRef(active);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (active === prevActive.current) return;
+    prevActive.current = active;
+    setFlashId(active);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setFlashId(null), 1400);
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  }, [active]);
+
   return (
-    <nav
-      aria-label="Section progress"
-      className="progress-rail"
-      style={{
-        background: "color-mix(in oklab, var(--surface) 90%, transparent)",
-        border: "1px solid var(--border)",
-        borderRadius: "999px",
-        padding: "0.5rem 0.4rem",
-        backdropFilter: "blur(12px)",
-        boxShadow: "0 4px 16px -4px rgba(0,0,0,0.18)",
-        gap: "0.2rem",
-      }}
-    >
+    <nav aria-label="Section progress" className="progress-rail">
       {sections.map((s) => {
         const isActive = s.id === active;
+        const isFlashing = s.id === flashId;
         return (
           <button
             key={s.id}
@@ -481,12 +483,12 @@ function ProgressRail({
               appearance: "none",
               background: "transparent",
               border: "none",
-              padding: "0.3rem 0.35rem",
+              padding: "0.25rem 0.3rem",
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
               justifyContent: "flex-end",
-              gap: "0.5rem",
+              gap: "0.45rem",
               color: "inherit",
             }}
           >
@@ -495,11 +497,11 @@ function ProgressRail({
               style={{
                 fontSize: "0.58rem",
                 color: "var(--ink-2)",
-                opacity: isActive ? 1 : 0,
-                maxWidth: isActive ? "8rem" : "0",
+                opacity: isFlashing ? 1 : 0,
+                maxWidth: isFlashing ? "10rem" : "0",
                 overflow: "hidden",
                 whiteSpace: "nowrap",
-                transition: "opacity .25s, max-width .3s ease",
+                transition: "opacity .2s ease, max-width .25s ease",
                 textAlign: "right",
                 letterSpacing: "0.04em",
               }}
@@ -507,16 +509,18 @@ function ProgressRail({
               {s.label}{s.meta ? ` · ${s.meta}` : ""}
             </span>
             <span
+              className="mono"
               style={{
-                display: "block",
-                width: isActive ? "20px" : "6px",
-                height: "6px",
-                background: isActive ? "var(--ink)" : "var(--border)",
-                borderRadius: "999px",
-                transition: "all .25s ease",
+                fontSize: "0.6rem",
+                color: isActive ? "var(--ink)" : "var(--ink-3)",
+                transition: "color .25s ease",
                 flexShrink: 0,
+                letterSpacing: "0.02em",
+                lineHeight: 1,
               }}
-            />
+            >
+              {s.num}
+            </span>
           </button>
         );
       })}

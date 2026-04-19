@@ -770,6 +770,11 @@
    gap: 0.65rem;
    padding: 0.5rem;
  }
+
+ .progress-rail button:focus-visible {
+   outline: none;
+   box-shadow: none;
+ }
  
  .loading-card {
    width: min(100%, 72rem);
@@ -1002,7 +1007,11 @@
    }
  
    .progress-rail {
-     display: none;
+     top: auto;
+     bottom: 5.5rem;
+     right: 0.75rem;
+     transform: none;
+     flex-direction: column;
    }
  
    .kpi-grid,
